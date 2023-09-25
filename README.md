@@ -2,7 +2,7 @@
 
 본 저장소는 '사전 학습 모델의 위치 임베딩 길이 제한 문제를 극복하기 위한 방법론(Methodology for Overcoming the Problem of Position Embedding Length Limitation in Pre-training Models)' 연구를 위해 작성되었다.
 
-## 1. Usage
+## 1. 사용 방법법
 
 ### 1.1. 데이터셋
 
@@ -11,8 +11,8 @@
 * (1) KorQuad v1.0
 * (2) AIHub 기계독해
 * (3) AIHub 뉴스 기사 기계독해 데이터
-* (4) 일반상식
-* (5) 행정 문서 대상 기계독해 데이터
+* (4) AIHub 일반상식
+* (5) AIHub 행정 문서 대상 기계독해 데이터
 
 위의 데이터셋을 아래와 같은 디렉토리 구조를 가지도록 배치한다.
 
@@ -139,7 +139,8 @@ python train.py \
 
 두 번째 쉘에서 'test_dir'와 'context_dir', 'pretrained_models_dir'를 수정하면 각각 시험 데이터와 사전학습 모델의 경로를 수정할 수 있다.
 
-```
+```python
+
 test_dir = "data/aihub_administration/test.json"
 context_dir = "data/aihub_administration/context.json"
 
@@ -147,6 +148,65 @@ pretrained_models_dir = "result/roberta/aihub_administration_1024/"
 
 batch_size = 64
 max_length = 1024
+
 ```
+
+쉘을 순서대로 진행하면, 다섯 번째 쉘에서 성능이 측정된다.
+
+```python
+
+for i, pred in enumerate(preds):
+
+    predictions = pred.predictions
+    label_ids = pred.label_ids
+    
+    exact_match = 0
+    f1 = 0
+    total = 0
+
+    result = []
+
+    for sample_idx, sample in enumerate(test_set.samples):
+
+        pred_start = predictions[0][sample_idx].argmax(-1)
+        pred_end = predictions[1][sample_idx].argmax(-1)
+
+        pred_text = tokenizer.decode(test_set[sample_idx]["input_ids"][pred_start:pred_end], skip_special_tokens=True)
+
+        label_text = context[sample["context"]][sample["answer_start"]:sample["answer_end"]]
+        
+        exact_match += exact_match_score(pred_text, label_text)
+        f1 += f1_score(pred_text, label_text)
+
+        total += 1
+
+    exact_match = round(100.0 * exact_match / total, 4)
+    f1 = round(100.0 * f1 / total, 4)
+
+    print("[{}] em score: {}\tf1_score: {}".format(pretrained_models[i], exact_match, f1))
+
+
+```
+
+```markdown
+
+[checkpoint-147611] em score: 72.8826	f1_score: 90.1524
+[checkpoint-163149] em score: 72.732	f1_score: 90.1227
+[checkpoint-170918] em score: 72.6915	f1_score: 90.2541
+
+```
+
+# 2. 모델 구조
+
+본 연구를 위해 토큰 분류(Token Classification) 기법을 활용한 질의응답(Question Answering, QA) 모델을 사용하였으며, 코드는 huggingface의 'BertForQuestionAnswering'을 활용하였다.
+
+모델 구조는 아래와 같다.
+
+<img src="https://github.com/skaeads12/OvercomingPositionEmbeddingLimitation/assets/45366231/d0bfd8d6-452f-4d1a-87c6-f54feeec681d" width=65% height=65%>
+<img src="https://github.com/skaeads12/OvercomingPositionEmbeddingLimitation/assets/45366231/704edb35-f853-422d-bf30-d64df8591d13" width=50% height=50%>
+
+[이미지 출처: https://www.kaggle.com/code/arunmohan003/question-answering-using-bert]
+
+최대 길이 변환을 위해 사용한 기법은 논문 참조. 소스 코드는 model.py의 set_position_embeddings 메소드 확인.
 
 
